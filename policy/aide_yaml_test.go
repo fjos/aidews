@@ -92,7 +92,6 @@ func TestIAMPolicyStatementEmptyYAML(t *testing.T) {
 	}
 	want := `Sid: "12"
 Effect: ""
-Action: []
 `
 	if string(out) != want {
 		t.Errorf("unexpected out; want: %s got %s", want, string(out))

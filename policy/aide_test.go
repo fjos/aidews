@@ -2,6 +2,7 @@ package policy
 
 import (
 	"encoding/json"
+	"reflect"
 	"testing"
 )
 
@@ -106,7 +107,7 @@ func TestIAMPolicyStatementEmptyJSON(t *testing.T) {
 	if err != nil {
 		t.Errorf("unexpected error; got: %s", err)
 	}
-	want := "{\"Sid\":\"12\",\"Effect\":\"\",\"Action\":null}"
+	want := "{\"Sid\":\"12\",\"Effect\":\"\"}"
 	if string(out) != want {
 		t.Errorf("unexpected out; want: %s got %s", want, string(out))
 	}
@@ -123,8 +124,104 @@ func TestIAMPolicyStatementNotEmptyJSON(t *testing.T) {
 	if err != nil {
 		t.Errorf("unexpected error; got: %s", err)
 	}
-	want := `{"Sid":"12","Effect":"","Action":null,"Resource":"iam:","Principal":{"AWS":"iam"},"Condition":{"String":"matching ARN"}}`
+	want := `{"Sid":"12","Effect":"","Resource":"iam:","Principal":{"AWS":"iam"},"Condition":{"String":"matching ARN"}}`
 	if string(out) != want {
 		t.Errorf("unexpected out; want: %s got %s", want, string(out))
+	}
+}
+
+func TestIAMPolicy_Marshal(t *testing.T) {
+
+	tests := []struct {
+		name    string
+		policy  IAMPolicy
+		want    []byte
+		wantErr bool
+	}{
+		{
+			name: "IAMPolicy Marshal",
+			policy: IAMPolicy{
+				Version: "12",
+				Statement: []IAMPolicyStatement{
+					{
+						Effect:   "Allow",
+						Action:   StrOrSlice{"iam:*"},
+						Resource: StrOrSlice{"*"},
+					},
+				},
+			},
+			want: []byte(`{"Version":"12","Statement":[{"Effect":"Allow","Action":"iam:*","Resource":"*"}]}`),
+		},
+		{
+			name: "IAMPolicy Not Marshal",
+			policy: IAMPolicy{
+				Version: "12",
+				Statement: []IAMPolicyStatement{
+					{
+						Effect:      "Allow",
+						NotAction:   StrOrSlice{"iam:*"},
+						NotResource: StrOrSlice{"*"},
+					},
+				},
+			},
+			want: []byte(`{"Version":"12","Statement":[{"Effect":"Allow","NotAction":"iam:*","NotResource":"*"}]}`),
+		},
+		{
+			name: "IAMPolicy Marshal Lists",
+			policy: IAMPolicy{
+				Version: "12",
+				Statement: []IAMPolicyStatement{
+					{
+						Effect:   "Allow",
+						Action:   StrOrSlice{"act:1", "act:2"},
+						Resource: StrOrSlice{"res1", "res2"},
+					},
+				},
+			},
+			want: []byte(`{"Version":"12","Statement":[{"Effect":"Allow","Action":["act:1","act:2"],"Resource":["res1","res2"]}]}`),
+		},
+		{
+			name: "IAMPolicy Principal",
+			policy: IAMPolicy{
+				Version: "12",
+				Statement: []IAMPolicyStatement{
+					{
+						Effect: "Allow",
+						Action: StrOrSlice{"sts:AssumeRole"},
+						Principal: map[string]StrOrSlice{
+							"AWS": StrOrSlice{"root"},
+						},
+					},
+				},
+			},
+			want: []byte(`{"Version":"12","Statement":[{"Effect":"Allow","Action":"sts:AssumeRole","Principal":{"AWS":"root"}}]}`),
+		},
+		{
+			name: "IAMPolicy NotPrincipal",
+			policy: IAMPolicy{
+				Version: "12",
+				Statement: []IAMPolicyStatement{
+					{
+						Effect: "Deny",
+						Action: StrOrSlice{"sts:AssumeRole"},
+						NotPrincipal: map[string]StrOrSlice{
+							"AWS": StrOrSlice{"root"},
+						},
+					},
+				},
+			},
+			want: []byte(`{"Version":"12","Statement":[{"Effect":"Deny","Action":"sts:AssumeRole","NotPrincipal":{"AWS":"root"}}]}`),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got, err := json.Marshal(tt.policy); (err != nil) != tt.wantErr {
+				t.Errorf("IAMPolicy Marshal() error = %v, wantErr %v", err, tt.wantErr)
+			} else {
+				if !reflect.DeepEqual(got, tt.want) {
+					t.Errorf("IAMPolicy Marshal() = %v, want %v", string(got), string(tt.want))
+				}
+			}
+		})
 	}
 }
